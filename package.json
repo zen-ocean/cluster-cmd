@@ -1,0 +1,34 @@
+{
+  "name": "cluster-cmd",
+  "version": "1.0.0",
+  "description": "Cluster ipc framework implementing request/reply pardigm",
+  "main": "cluster-cmd.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "mocha test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lomecky/cluster-cmd.git"
+  },
+  "keywords": [
+    "cluster",
+    "multithreading",
+    "ipc",
+    "thread"
+  ],
+  "author": "Stan Lomecky",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lomecky/cluster-cmd/issues"
+  },
+  "homepage": "https://github.com/lomecky/cluster-cmd#readme",
+  "dependencies": {
+    "mocha": "^5.2.0",
+    "cluster" :  "^11.6.0",
+    "util" :  "^11.6.0",
+    "serialize-error" :  "^3.0.0"
+  }
+}
