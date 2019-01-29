@@ -2,16 +2,16 @@
   "name": "cluster-cmd",
   "version": "1.0.0",
   "description": "Cluster ipc framework implementing request/reply pardigm",
-  "main": "cluster-cmd.js",
+  "main": "index.js",
   "directories": {
     "test": "test"
   },
   "scripts": {
-    "test": "mocha test"
+    "test": "mocha"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lomecky/cluster-cmd.git"
+    "url": "git+https://github.com/zen-ocean/cluster-cmd.git"
   },
   "keywords": [
     "cluster",
@@ -22,13 +22,15 @@
   "author": "Stan Lomecky",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/lomecky/cluster-cmd/issues"
+    "url": "https://github.com/zen-ocean/cluster-cmd/issues"
   },
-  "homepage": "https://github.com/lomecky/cluster-cmd#readme",
+  "homepage": "https://github.com/zen-ocean/cluster-cmd#readme",
   "dependencies": {
-    "mocha": "^5.2.0",
-    "cluster" :  "^11.6.0",
-    "util" :  "^11.6.0",
-    "serialize-error" :  "^3.0.0"
+    "cluster": "^11.6.0",
+    "serialize-error": "^3.0.0",
+    "util": "^11.6.0"
+  },
+  "devDependencies": {
+    "mocha": "^5.2.0"
   }
 }

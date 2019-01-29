@@ -1,10 +1,10 @@
 # cluster-cmd
 
-**cluster-cmd** is a framework implementing the command-response paradigm for the Cluster module. Instead of packing IPC logic into the 'worker.on' and 'process.on' event handlers, you can  call a function in another thread pretty much the same way  you would call a local function.
+**cluster-cmd** is a small framework implementing the command-response paradigm for the Cluster module. Instead of concentrating inter-process comunication (ipc)  logic into the ```worker.on``` and ```process.on``` event handlers, you can  call a function in another thread pretty much the same way  you would call a local function.
 
 Main features:
 
-  - transparent to the NodeJS cluster module
+  - transparent to the Node.js cluster module
   - master-to-worker and worker-to-master commands
   - basic master-worker synchronization
   - timeout handling
@@ -14,39 +14,36 @@ Main features:
 
 Synchronous or asynchronous command handlers are registered using the ```on.sync```
 or ```on.async``` functions, respectively.
-Using the ```run```  function, these commands then can be run remotely from another thread.
+These commands can then be executed remotely using the ```run```  function.
 
 Step 1:  Require cluster-cmd:
 ````javascript
 const clc = require('cluster-cmd')
 ````
 
-Step 2: Start a new worker without waiting for it to start up ...
+Step 2: As master, start a new worker without waiting for it to start up ...
 ````javascript
 clc.fork('worker')
 ````
-... or start it and wait until it has replied with 'ready' or 'failed':
+... or start it and wait until it has replied with 'ready' or 'failed' message:
 ````javascript
-if (clc.myName == 'master') {
-    clc.forkWait('worker')
-    .then(() => {
-        console.log('worker is ready')
-    })
-    .catch(err => {
-        console.log(`worker initialization failed: ${err}`);
-    })
-}
-
+clc.forkWait('worker')
+.then(() => {
+    console.log('worker is ready')
+})
+.catch(err => {
+    console.log(`worker initialization failed: ${err}`);
+})
 ````
 
-Step 3: Register your command handlers, either sync: 
+Step 3: Register your command handlers, either sync ...
 ````javascript
 clc.on.sync('add', ([a,b]) => {  
     	return a + b;
 });
 ````
 
-or async: 
+... or async: 
 ````javascript
 clc.on.async('async_add', ([a,b]) => {  
     return new Promise(resolve => {
@@ -56,26 +53,30 @@ clc.on.async('async_add', ([a,b]) => {
     })
 })
 ````
-Step 4: Inside master code, run the command - previously registered in a worker - with async/await syntax: 
+Step 4: Inside master code, run the command - previously registered in a worker - with async/await syntax : 
 ````javascript
 let sum = await clc.run('worker', 'add', [3,4]);
 // very much like the local version: let sum = add([3,4])
 ````
-or with promise syntax:
+... or with promise syntax:
 ````javascript
 clc.run('worker', 'add', [3,4])
 .then(sum => {
     ...
 })
+.catch(err => {
+    ...
+})
 ````
-or with good old callback syntax:
+... or with good old callback syntax:
 ````javascript
 clc.run('worker', 'add', [3,4], (err, sum) => {
-    ...
+    if (err)  ...
+    else ....
 })
 
 ````
-Inside worker code, run the command registered by master:
+Inside worker code, run the command 'add' registered by master:
 ````javascript
 let sum = await clc.run('add', [3,4])
 
@@ -83,9 +84,6 @@ let sum = await clc.run('add', [3,4])
 The promise and callback variants work analogously.
 
 See below for a <a href="#example">full working example</a>.
-
-
-
 
 
 # Exports
@@ -97,9 +95,9 @@ See below for a <a href="#example">full working example</a>.
 * <a href="#failed">failed</a>
 * <a href="#cancel">cancel</a>
 * <a href="#setoptions">setOptions</a>
+* <a href="#removeworkername">removeWorkerName</a>
 * <a href="#getworkerbyname">getWorkerByName</a>
 * <a href="#getworkernames">getWorkerNames</a>
-* <a href="#removeworkername">removeWorkerName</a>
 * <a href="#myname">myName</a>
 
 
@@ -108,9 +106,16 @@ See below for a <a href="#example">full working example</a>.
 * ````workerName````: string  
 * ````env````: object
 
-This function forks (starts) a new worker with the specified name. The name can be subsequently used to refer to the worker.  ````getWorkerByName(workerName)````  gets you the underlying cluster.worker object. ````getNames()```` returns an array of all worker names.
+This function starts a new worker with the specified name. The worker name serves as a reference to the worker.  ````getWorkerByName(workerName)````  gets you the underlying cluster.worker object. ````getNames()```` returns an array of all worker names.
 
-````env```` is an object whose properties will be added to the worker's process.env object. Default is {}. ````fork```` always adds the property ````'_workerName'```` holding the worker name to the worker's environment.
+````env```` is an object whose properties will be added to the worker's ````process.env```` object. Default is { }. ````fork```` always adds the property ````'_workerName'````(holding the worker's name) to the worker's environment.
+
+````fork```` can produce the following errors (error.code):
+* ERR_NO_WORKERNAME : missing worker name 
+* ERR_WORKERNAME_NOT_STRING : worker name is not a string
+* ERR_WORKERNAME_EXISTS: a worker with the same name already exists
+* ERR_WORKERNAME_MUST_NOT_BE_MASTER: 'master' is not allowed as worker name
+
 
 <h2 id="forkwait">forkWait(workerName [,env] [, timeoutMs] [, callback])</h2>
 
@@ -134,19 +139,31 @@ Promise.all[
 // process.env.port will be available in all workers 
 
 ````
+````forkWait```` can produce the same errors as ````fork```` plus:
+* ERR_FORK_TOO_MANY_ARGS: too many arguments
+* ERR_WORKER_TIMED_OUT: worker did not call ````ready```` within ````timeoutMs```` milliseconds
+* ERR_WORKER_FAILED: worker called ````failed````
+
+
 
 <h2 id="on">on</h2
 
-You cannot call ```on``` directly but have to use one of the following:
+You cannot call ```on``` directly but have to use ````on.sync```` or  ````on.async````. If you call ```on``` directly, you will get the ERR_ONSYNC_OR_ONASYNC error.
 
 ## on.sync(command, handler)
 
 
 * ````command````: string  
-* ````handler````: function (arguments, command, workerName)
+* ````handler````: function (arguments, command, workerName, timeoutMs)
 
-This function registers a sync command handler, i.e. a function returning a value. It can be used both in master and worker mode. A special case is  ```` command == '*'```` used to register a default command handler. 
+This function registers a sync command handler, i.e. a function returning a value. It can be used both in master and worker mode. A special case is  ```` command == '*'```` which registers a default command handler (used when no specific command handler exists).
 
+If you mistakenly register an async function with ````on.sync````, you will get the ERR_NOT_SYNC_HANDLER error at the next ````run````  .
+
+````on.async```` can produce the following errors (error.code):
+
+* ERR_INVALID_COMMAND: ````command```` is undefined or not a string
+* ERR_INVALID_HANDLER: ````command```` is undefined or not a function
 
 
 Example: registration of a specific command handler
@@ -156,7 +173,7 @@ clc.on.sync('getEnvVar', ({name}) => {
 })
 ````
 
-Example: registration of the default handler
+Example: registration of the default handler ('*')
 ````javascript
 clc.on.sync('*', (args, command)  => {
     console.log(`User called command ${command} with arguments ` +
@@ -165,13 +182,21 @@ clc.on.sync('*', (args, command)  => {
 ````
 ## on.async(command, handler)
 * ````command````: string  
-* ````handler````: function (arguments, command, workerName)
+* ````handler````: function (arguments, command, workerName, timeoutMs)
 
-This function registers an async command handler, i.e. a function returning a Promise. In all other respects it is similar to ````onSync````.
+This function registers an async command handler, i.e. a function returning a Promise object. In all other respects it is the same as ````on.sync````. 
+
+If you mistakenly register an sync function with ````on.async````, you will get the ERR_NOT_ASYNC_HANDLER error at the next ````run````.
+
+````on.async```` produces the same errors as ````on.sync````.
+
+<b>N.B.:  Async handlers using callback are not supported!</b>
 
 Example:
 ````javascript
-clc.on.sync('wget', ({url}) => {
+var request = require('request');
+
+clc.on.async('wget', ({url}) => {
     return new Promise((resolve, reject) => {
         request(url, (err, response) => {
             if (err) reject(err);
@@ -181,21 +206,22 @@ clc.on.sync('wget', ({url}) => {
 })
 ````
 
+````on.sync```` produces the same errors as ````on.async````.
 <h2 id="run">run(workerName, command [, args] [, timeoutMs] [, callback])</br>
-run(command [, args] [, timeoutMs] [. callback]) </h2>
+run(command [, args] [, timeoutMs] [, callback]) </h2>
 
 
 * ````workerName````: string (only in master mode) 
 * ````command````: string 
 * ````args````: object
 * ````timeoutMs````: number
-* ````handler````: function
-* ````returns````: string (for the callback version) or Promise
+* ````callback````: function(err, data)
+* ````returns````: id (for the callback version, see ```cancel```) or Promise
 
 This function executes a command registered in another thread.
 The first version is used in master mode, the second in worker mode. 
 
-````workerName```` is the name of the target worker (only in master mode). It is not possible for a worker to run commands in another worker. It is however possible to specify ````workerName == 'master' ````. In this special case the master runs the command directly in the same thread, bypassing the inter-process communication mechanisms. This is very practical if master and workers are running the same code and you need to send the same command to all instances, like in the following example:
+````workerName```` is the name of the target worker (only in master mode). It is not possible for a worker to run commands in another worker. However, in master code it is possible to specify ````workerName == 'master' ````. In this special case the master runs the command directly in its own thread, bypassing the inter-process communication mechanisms. This is very practical if master and workers are running the same code and you need to send the same command to all instances, like in the following example:
 
 ````javascript
 ...
@@ -207,36 +233,60 @@ let status = await Promise.all(promises);
 ...    
 ````
 
-
-
 ````command```` is the name of a previously registered command 
 
 ````args```` is passed to the command handler and can be anything of type 'object' which can be serialized and de-serialized by JSON.
 
-````timeoutMs```` specifies a timeout interval in millisecods. If it is omitted, the default timeout interval is used (default is 5 minutes). A value of 0 means that no timer will be set. 
+````timeoutMs```` specifies a timeout interval in millisecods. If it is omitted, the default timeout interval is used (default is currently 5 minutes). A value of 0 means that no timer will be set. 
 
-````handler````: a command handler funtion of the type ````function(command, args)````.
+````handler````: a command handler funtion of the type ````function(command, args, timeoutMs)````.
 
-The callback version of ````run```` returns an id which can be used to cancel the command  (see ````cancel````). In the promise version, this id can be found in  the ````pendingId```` property of the returned promise (again, see ````cancel```` for an example).
+The callback version of ````run```` returns an id which can be used to cancel the command  (see ````cancel````). In the promise version, this id can be got through the  ````id```` property of the returned promise (again, see ````cancel```` for an example).
+
+````run```` can produce the following errors (error.code):
+
+* ERR_TOO_MANY_ARGUMENTS: self-explanatory
+* ERR_WORKERNAME_NOT_STRING: self-explanatory
+* ERR_COMMAND_NOT_STRING: self-explanatory
+* ERR_INVALID_COMMAND: command was not registered
+* ERR_WORKERNAME_DOESNT_EXIST: worker name not found in worker list
+* ERR_WORKER_DEAD_OR_DISCONNECTED: self-explanatory
+* ERR_COMMAND_CANCELED: command was canceled using the ```cancel``` function
+* ERR_NOT_SYNC_HANDLER: : command handler should be registered with ````on.async````
+* ERR_NOT_ASYNC_HANDLER: command handler should be registered with ````on.sync````
+* ERR_COMMAND_TIMED_OUT: command didn't execute within ````timeoutMs```` milliseconds
+* ERR_PENDING_OVERFLOW  the default maximum of currently pending commands exceeded (default: 1000, see ```setOptions```)
+
 
 <h2 id="ready">ready([data])</h2
-* data
+
+* ```data```: anything JSON.stringifiable
 
 This function is called by a worker after it is initialized and ready to receive commands from master.
 
 ````data```` is passed to the ````forkWait```` function and can be anything which can be handled by ````process.run```` (basically JSON.stringifiable)
 
+````ready```` doesn't produce errors.
+
+
 <h2 id="failed">failed([err])</h2
-* err
 
-This function is called by a worker when initialization failed and the worker cannot receive commands from master. After calling ````failed```` the worker typically exits with ````cluster.worker.kill()````.
+* ```err```: Error object or anything  JSON.stringifiable
 
-````err````  is an optional Error object passed to ````forkWait````.
+This function is called by a worker when initialization failed and the worker cannot receive commands from master.
+
+````err````  is optional and is passed back to ````forkWait````. When omitted, an ERR_WORKER_FAILED error is generated and passed to ```forkWait```.
+
+After calling ````failed```` the worker typically exits with ````cluster.worker.kill()````.
+
+````failed```` doesn't produce errors.
+
 
 <h2 id="cancel">cancel(id)</h2
+
 * ````id````: string
 
-This function allow to cancel a pending command created by ````run````. The command is terminated with an 'ECANCELED' error.
+This function allow to cancel a pending command created by ````run````. The command is immediately terminated with an ERR_COMMAND_CANCELED error.
 
 ````id```` is the command id originally returned by ````run````. ````cancel````  offers a more flexible way to cancel a command than the ````timeoutMs```` argument. Example: 
 
@@ -249,17 +299,23 @@ if (bored) cancel(id);
 The same in promise style:
 
 ````javascript
-let promise = clc.run('worker', 'sluggish', 0);   // no timer
+var id;
+clc.run('worker', 'sluggish', 0)   // no timer
+.id(cmdId => {
+    id = cmdId;
+})
+.then(() => {
+    ...
+})
+.catch(err => {
+    ...
 
-promise.then(...);
-promise.catch(...);
-
-let id = promise.pendingId;
-...
-...
 if (bored) cancel(id);
 ````
+The ```id``` property of the returned promise expects a callback function which is called with the id string. It is important to place ```.id(...) ``` before ```.then``` and ```.catch(...)``` as the latter don't return the complete promise object.
 
+
+````cancel```` doesn't produce errors.
 
 <h2 id="setoptions">setOptions(info)</h2
 
@@ -268,23 +324,43 @@ if (bored) cancel(id);
 
 This function sets the global options for cluster-cmd.
 
-````info```` is an object of type {name1 : value1, name2 : value2...}. Currently, the following options are available:
+````info```` is an object of type { name: value, name : value, ...  }. Currently, the following options are available:
 
-* ````defaultTimeout```` (default: 300000 - 5 min)
+* ````forkWaitTimeout```` (default: 3000 - 5 min)
+* ````runTimeout```` (default: 300000 ) 
 * ````maxPendingCommands```` (default: 1000) 
 
-````defaultTimeout```` is used when no ```timeoutMs``` argument is specified in ````forkWait```` and ````run````.
+````forkWaitTimeout```` is used  in ````forkWait````,  ```runTimeout```   in ````run````.
 
-````maxPendingCommands```` designates the maximum number of pending commands, i.e. commands which have been started by ````run```` but which have not yet returned an answer. If this number is exceeded, the next ````run```` returns a 'pending overflow' error.
+````maxPendingCommands```` designates the maximum number of pending commands, i.e. commands which have been started by ````run```` but which have not yet returned a reply. If this number is exceeded, the next ````run```` returns an ERR_PENDING_OVERFLOW error.
 
 The function returns an object with the complete previous option values. Thus ````setOptions()```` can be used to obtain the current options without changing them.
 
+````setOptions```` can produce the following errors (error.code):
+* ERR_INVALID_OPTION
+
+
+<h2 id="removeworkername">removeWorkerName(workerName)</h2
+
+* ````workerName````: string
+* ````returns: ````: boolean
+
+This function removes the ```workerName : worker``` entry from the list of created workers. It is the user's responsibility to terminate the worker in the proper way. 
+
+It returns ```true``` if the entry was found, ```false``` otherwise.
+
+
+````removeWOrkerName```` doesn't produce errors.
 
 <h2 id="getworkerbyname">getWorkerByName(workerName)</h2
 
 * ````workerName````: string
+* ````returns````: Cluster.worker object or ```undefined```
 
-This function returns the cluster.worker object referenced by ````workerName````
+This function returns the ```Cluster.worker``` object referenced by ````workerName```` or ```undefined``` when  no such object exists.
+
+````getWorkerByName```` doesn't produce errors.
+
 
 <h2 id="getworkernames">getWorkerNames()</h2
 
@@ -292,19 +368,39 @@ This function returns the cluster.worker object referenced by ````workerName````
 
 This function returns the array of all workerNames created by ````fork```` or ````forkWait````
 
+````getWorkerNames```` doesn't produce errors.
+
 
 <h2 id="myname">myName</h2
 
 This constant contains the current worker name (in worker code) or 'master' (in master mode).
 
-<h2 id="example">Full working example:</h2
+
+
+# Tests
+
+Mocha tests are available for master and worker code: 
+
+```
+npm test test/master.js
+```
+and 
+
+```
+npm test test/worker.js
+```
+Please run the above texts separately - ```npm test``` won't work as Mocha has some subtle issues when running in multithreaded envornment (well, perhaps I could have figured it out but didn't have the time and motivation...)
+
+<h1 id="example">Full working example:</h2
 
 ````javascript
 ````
 
 
 ```javascript
-const clc = require('./cluster-cmd.js');
+/* eslint-disable no-console */
+
+const clc = require('cluster-cmd');
 
 // Register a sync command handler for both master and worker
 clc.on.sync('add', ([a,b]) => {  
@@ -320,36 +416,49 @@ clc.on.async('async_add', ([a,b]) => {
     })
 })
 
+
 if (clc.myName == 'master') { 
     // code executed by master
 
     // fork (start) a new worker thread and name it 'worker'
-    // with a timeout interval of 5 seconds
+    // with a timeout interval of 5 seconds ...
+    console.log(`${clc.myName}: starting worker`);
     clc.forkWait('worker', 5000) 
 
-    // and wait until it has sent a 'ready' message   
+    // ... and wait until it has sent a 'ready' message   
     .then(async () => {  
-        console.log(`master: worker is ready`);
+        console.log(`${clc.myName}: received 'ready' from worker`); 
         
         // Run worker's 'add' command:
         let sum = await clc.run('worker','add',[3,4]); 
-        console.log(`master: sum is ${sum}`)  // master: sum is 7
+        console.log(`${clc.myName}: 3 + 4 =  ${sum}`)  // master: sum is 7 
+
+        // Run worker's 'async_add' command in the same way:
+        sum = await clc.run('worker','async_add',[3,4]); 
+        console.log(`${clc.myName}: 3 + 4 =  ${sum}`)  // master: sum is 7 
 
         // Alternatively, you can use promise syntax:
-        sum = clc.run('worker','add',[3,4])
+        sum = await clc.run('worker','add',[3,4])
         .then(sum => {
-            console.log(`master: sum is ${sum}`)  // master: sum is 7
+            console.log(`${clc.myName}: 3 + 4 = ${sum}`)  // master: sum is 7
         })
 
         // or good old callback syntax:
-        clc.run('worker','add',[3,4], (err, sum) => {
-             console.log(`master: sum is ${sum}`)  // master: sum is 7
+        sum = await clc.run('worker','async_add',[3,4], (err, sum) => {
+             if (err) console.log(err);
+             else console.log(`${clc.myName}: 3 + 4 = ${sum}`)  // master: sum is 7
         })
 
-        // Execute worker's add_sync command in the same way
-        sum = await clc.run('worker','async_add',[5,7]); 
-        console.log(`master: sum is ${sum}`)  // master: sum is 12
+        // Execute worker's 'doSomethingUseful' command in the same way
+        console.log(`${clc.myName}: calling worker's 'calculate' command`)  
+        await clc.run('worker','calculate'); 
 
+        // Terminate worker
+        let worker = clc.getWorkerByName('worker');
+        worker.on('exit', () => {
+            console.log(`${clc.myName}: worker terminated`)
+        })
+        worker.process.kill();
     })
 
     // If the worker does not signal 'ready' within 5 seconds
@@ -359,22 +468,18 @@ if (clc.myName == 'master') {
     })
 }
 else if (clc.myName == 'worker') { 
-    // code exexuted by worker 
- 
-    //  signal to master that the worker is ready to 
-    //  receive commands.
-    clc.ready(); 
+    // code executed by worker
 
-    // Run master's 'add' command (see master section for variants)
-    clc.run('add',[3,4])
-    .then(sum => {
-        console.log(`${clc.myName}: sum is ${sum}`)  // worker: sum is 7
-    }) 
-    // Run master's 'async_add' command (see master section vor variants)
-    clc.run('async_add',[5,7])
-    .then(sum => {
-        console.log(`worker: sum is ${sum}`)  // worker: sum is 12
-    }) 
+    // Register async command handler
+    clc.on.async('calculate', async () => {
+        // Call master's 'add' command
+        console.log(`${clc.myName}: 5 + 7 = ${await clc.run('add',[5,7])}`); 
+        console.log(`${clc.myName}: 6 + 8 = ${await clc.run('async_add',[6,8])}`); 
+    })
+
+    // Ready to receive commands
+    console.log(`${clc.myName} is ready`);
+    clc.ready(); 
 }
 ```
 
