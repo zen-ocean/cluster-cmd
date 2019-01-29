@@ -16,74 +16,41 @@ Synchronous or asynchronous command handlers are registered using the ```on.sync
 or ```on.async``` functions, respectively.
 These commands can then be executed remotely using the ```run```  function.
 
-Step 1:  Require cluster-cmd:
+Here is a 'Hello world' example: 
 ````javascript
-const clc = require('cluster-cmd')
-````
+const clc = require("cluster-cmd");
 
-Step 2: As master, start a new worker without waiting for it to start up ...
-````javascript
-clc.fork('worker')
-````
-... or start it and wait until it has replied with 'ready' or 'failed' message:
-````javascript
-clc.forkWait('worker')
-.then(() => {
-    console.log('worker is ready')
-})
-.catch(err => {
-    console.log(`worker initialization failed: ${err}`);
-})
-````
+async function masterCode() {
+    // Start thread 'worker'
+    await clc.forkWait('worker');
 
-Step 3: Register your command handlers, either sync ...
-````javascript
-clc.on.sync('add', ([a,b]) => {  
-    	return a + b;
-});
-````
+    // Run 'helloWorld' command in 'worker'
+    await clc.run('worker','helloWorld');
 
-... or async: 
-````javascript
-clc.on.async('async_add', ([a,b]) => {  
-    return new Promise(resolve => {
-        setTimeout(() => {
-            resolve(a + b);
-        }, 2000)
+    // terminate 'worker' thread
+    clc.getWorkerByName('worker').kill();   
+}
+
+function workerCode() {
+    // Register 'helloWorld' command handler
+    clc.on.sync('helloWorld', () => {
+        console.log(`From ${clc.myName}: Hello world!`);
     })
-})
-````
-Step 4: Inside master code, run the command - previously registered in a worker - with async/await syntax : 
-````javascript
-let sum = await clc.run('worker', 'add', [3,4]);
-// very much like the local version: let sum = add([3,4])
-````
-... or with promise syntax:
-````javascript
-clc.run('worker', 'add', [3,4])
-.then(sum => {
-    ...
-})
-.catch(err => {
-    ...
-})
-````
-... or with good old callback syntax:
-````javascript
-clc.run('worker', 'add', [3,4], (err, sum) => {
-    if (err)  ...
-    else ....
-})
 
-````
-Inside worker code, run the command 'add' registered by master:
-````javascript
-let sum = await clc.run('add', [3,4])
+    // Tell master that I'm ready to receive commands
+    clc.ready();
+}
 
+if (clc.myName == 'master') {
+    masterCode() 
+}
+else {
+    workerCode();
+}
 ````
-The promise and callback variants work analogously.
 
-See below for a <a href="#example">full working example</a>.
+
+See <a href="#example">below</a> for another example demonstrating both master -> worker and worker -> master communication.
 
 
 # Exports
