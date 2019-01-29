@@ -391,10 +391,8 @@ npm test test/worker.js
 ```
 Please run the above texts separately - ```npm test``` won't work as Mocha has some subtle issues when running in multithreaded envornment (well, perhaps I could have figured it out but didn't have the time and motivation...)
 
-<h1 id="example">Full working example:</h2
+<h1 id="example">Full working example:</h1>
 
-````javascript
-````
 
 
 ```javascript
