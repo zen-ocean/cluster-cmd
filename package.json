@@ -1,6 +1,6 @@
 {
   "name": "cluster-cmd",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Cluster ipc framework implementing request/reply paradigm",
   "main": "index.js",
   "directories": {
