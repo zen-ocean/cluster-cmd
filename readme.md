@@ -18,7 +18,7 @@ These commands can then be executed remotely using the ```run```  function.
 
 Here is a 'Hello world' example: 
 ````javascript
-const clc = require("cluster-cmd");
+const clc = require('cluster-cmd');
 
 async function masterCode() {
     // Start thread 'worker'
@@ -27,7 +27,7 @@ async function masterCode() {
     // Run 'helloWorld' command in 'worker'
     await clc.run('worker','helloWorld');
 
-    // terminate 'worker' thread
+    // Terminate 'worker' thread
     clc.getWorkerByName('worker').kill();   
 }
 
@@ -50,7 +50,7 @@ else {
 ````
 
 
-See <a href="#example">below</a> for another example demonstrating both master -> worker and worker -> master communication.
+See <a href="#example">below</a> for a more complex example demonstrating both master -> worker and worker -> master communication.
 
 
 # Exports
@@ -127,7 +127,7 @@ This function registers a sync command handler, i.e. a function returning a valu
 
 If you mistakenly register an async function with ````on.sync````, you will get the ERR_NOT_SYNC_HANDLER error at the next ````run````  .
 
-````on.async```` can produce the following errors (error.code):
+````on.sync```` can produce the following errors (error.code):
 
 * ERR_INVALID_COMMAND: ````command```` is undefined or not a string
 * ERR_INVALID_HANDLER: ````command```` is undefined or not a function
@@ -219,7 +219,7 @@ The callback version of ````run```` returns an id which can be used to cancel th
 * ERR_WORKERNAME_DOESNT_EXIST: worker name not found in worker list
 * ERR_WORKER_DEAD_OR_DISCONNECTED: self-explanatory
 * ERR_COMMAND_CANCELED: command was canceled using the ```cancel``` function
-* ERR_NOT_SYNC_HANDLER: : command handler should be registered with ````on.async````
+* ERR_NOT_SYNC_HANDLER: command handler should be registered with ````on.async````
 * ERR_NOT_ASYNC_HANDLER: command handler should be registered with ````on.sync````
 * ERR_COMMAND_TIMED_OUT: command didn't execute within ````timeoutMs```` milliseconds
 * ERR_PENDING_OVERFLOW  the default maximum of currently pending commands exceeded (default: 1000, see ```setOptions```)

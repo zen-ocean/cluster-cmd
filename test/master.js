@@ -1,5 +1,5 @@
 const cluster = require('cluster');
-const clc = require('cluster-cmd');
+const clc = require('./../index.js');
 const assert = require('assert');
 const AssertionError = require('assert').AssertionError;
 const util = require('util');
