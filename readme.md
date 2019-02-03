@@ -1,6 +1,6 @@
 # cluster-cmd
 
-**cluster-cmd** is a small framework implementing the command-response paradigm for the Cluster module. Instead of concentrating inter-process comunication (ipc)  logic into the ```worker.on``` and ```process.on``` event handlers, you can  call a function in another thread pretty much the same way  you would call a local function.
+**cluster-cmd** is a small framework implementing the command/response paradigm for the Node.js Cluster module. Instead of concentrating inter-process comunication logic into the ```worker.on``` and ```process.on``` event handlers, you can  call a function in another thread pretty much the same way  you would call a local function.
 
 Main features:
 
@@ -14,34 +14,42 @@ Main features:
 
 Synchronous or asynchronous command handlers are registered using the ```on.sync```
 or ```on.async``` functions, respectively.
-These commands can then be executed remotely using the ```run```  function.
+These commands can then be remotely executed by the ```run```  function.
 
-Here is a 'Hello world' example: 
+Here is a 'Hello world' example (also available in the ```./examples``` folder): 
 ````javascript
-const clc = require('cluster-cmd');
+const {forkWait, on, ready, run, getWorkerByName, myName} = 
+    require('cluster-cmd');
 
-async function masterCode() {
-    // Start thread 'worker'
-    await clc.forkWait('worker');
+function masterCode() {
+    // start thread 'worker' and wait until it is initialized
+    forkWait('worker')
+    .then(async () => {
+        console.log('Worker initialized');
 
-    // Run 'helloWorld' command in 'worker'
-    await clc.run('worker','helloWorld');
+        // run the 'helloWorld' command in 'worker'
+        await run('worker','helloWorld');
 
-    // Terminate 'worker' thread
-    clc.getWorkerByName('worker').kill();   
+        // terminate 'worker' thread
+        getWorkerByName('worker').kill();   
+    })
+    .catch(err => {
+        console.log(`Worker failed: ${err}`)
+    })
 }
 
 function workerCode() {
-    // Register 'helloWorld' command handler
-    clc.on.sync('helloWorld', () => {
-        console.log(`From ${clc.myName}: Hello world!`);
+
+    // register 'helloWorld' command handler
+    on.sync('helloWorld', () => {
+        console.log(`From ${myName}: Hello world!`);
     })
 
-    // Tell master that I'm ready to receive commands
-    clc.ready();
+    // tell master that I'm ready to receive commands
+    ready();
 }
 
-if (clc.myName == 'master') {
+if (myName == 'master') {
     masterCode() 
 }
 else {
@@ -73,7 +81,7 @@ See <a href="#example">below</a> for a more complex example demonstrating both m
 * ````workerName````: string  
 * ````env````: object
 
-This function starts a new worker with the specified name. The worker name serves as a reference to the worker.  ````getWorkerByName(workerName)````  gets you the underlying cluster.worker object. ````getNames()```` returns an array of all worker names.
+This function starts a new worker with the specified name. The worker name serves as a reference to the worker throughout the framework.  ````getWorkerByName(workerName)````  gets you the underlying cluster.worker object,  ````getNames()```` returns an array of all worker names.
 
 ````env```` is an object whose properties will be added to the worker's ````process.env```` object. Default is { }. ````fork```` always adds the property ````'_workerName'````(holding the worker's name) to the worker's environment.
 
@@ -90,17 +98,17 @@ This function starts a new worker with the specified name. The worker name serve
 * ````timeoutMs```` : number
 *  ````env````: object
 
-This function calls ````fork(workerName, env)```` , then waits until the worker has called the ````ready```` function. A timeout interval can be specified with ````timeoutMs````.
+This function calls ````fork(workerName, env)```` , then waits until the worker has called the ````ready```` function. A timeout interval in milliseconds can be specified in ````timeoutMs````.
 
 Example:
 ````javascript
-Promise.all[
+Promise.all([
     forkWait('server1', 6000, {port:8080}),
     forkWait('server2', 6000, {port:8081}),
     forkWait('server3', 6000, {port:8082})
-]
+])
 .then(() => {
-    console.log('All three workers running and initialized');
+    console.log('All three servers running and initialized');
 })
 
 // process.env.port will be available in all workers 
@@ -135,14 +143,14 @@ If you mistakenly register an async function with ````on.sync````, you will get 
 
 Example: registration of a specific command handler
 ````javascript
-clc.on.sync('getEnvVar', ({name}) => {
-        return process.env[name];
+on.sync('getEnvVar', ({name}) => {
+    return process.env[name];
 })
 ````
 
 Example: registration of the default handler ('*')
 ````javascript
-clc.on.sync('*', (args, command)  => {
+on.sync('*', (args, command)  => {
     console.log(`User called command ${command} with arguments ` +
     `${JSON.stringify(args)}`);
 })
@@ -157,13 +165,13 @@ If you mistakenly register an sync function with ````on.async````, you will get 
 
 ````on.async```` produces the same errors as ````on.sync````.
 
-<b>N.B.:  Async handlers using callback are not supported!</b>
+<b>N.B.:  The handler must return a Promise, callback is not supported!</b>
 
 Example:
 ````javascript
 var request = require('request');
 
-clc.on.async('wget', ({url}) => {
+on.async('wget', ({url}) => {
     return new Promise((resolve, reject) => {
         request(url, (err, response) => {
             if (err) reject(err);
@@ -173,7 +181,7 @@ clc.on.async('wget', ({url}) => {
 })
 ````
 
-````on.sync```` produces the same errors as ````on.async````.
+````on.async```` produces the same errors as ````on.sync````.
 <h2 id="run">run(workerName, command [, args] [, timeoutMs] [, callback])</br>
 run(command [, args] [, timeoutMs] [, callback]) </h2>
 
@@ -208,7 +216,7 @@ let status = await Promise.all(promises);
 
 ````handler````: a command handler funtion of the type ````function(command, args, timeoutMs)````.
 
-The callback version of ````run```` returns an id which can be used to cancel the command  (see ````cancel````). In the promise version, this id can be got through the  ````id```` property of the returned promise (again, see ````cancel```` for an example).
+The callback version of ````run```` returns an id which can be used to cancel the command  (see <a href = "#cancel"> ````cancel```` </a> for an example). In the promise version, this id can be got through the  ````id```` property of the returned promise (see <a href = "#cancel"> ````cancel```` </a> for an example)again, .
 
 ````run```` can produce the following errors (error.code):
 
@@ -258,7 +266,7 @@ This function allow to cancel a pending command created by ````run````. The comm
 ````id```` is the command id originally returned by ````run````. ````cancel````  offers a more flexible way to cancel a command than the ````timeoutMs```` argument. Example: 
 
 ````javascript
-let id = clc.run('worker', 'sluggish', 0, (err, data) => {...});  // no timer
+let id = run('worker', 'sluggish', 0, (err, data) => {...});  // no timer
 ...
 ...
 if (bored) cancel(id);
@@ -267,8 +275,8 @@ The same in promise style:
 
 ````javascript
 var id;
-clc.run('worker', 'sluggish', 0)   // no timer
-.id(cmdId => {
+run('worker', 'sluggish', 0)   // 0 means no timer
+.id(cmdId => { // id passed to callback
     id = cmdId;
 })
 .then(() => {
@@ -289,7 +297,7 @@ The ```id``` property of the returned promise expects a callback function which 
 * ````info````: object
 * ````returns````: object
 
-This function sets the global options for cluster-cmd.
+This function sets the global options.
 
 ````info```` is an object of type { name: value, name : value, ...  }. Currently, the following options are available:
 
@@ -299,9 +307,9 @@ This function sets the global options for cluster-cmd.
 
 ````forkWaitTimeout```` is used  in ````forkWait````,  ```runTimeout```   in ````run````.
 
-````maxPendingCommands```` designates the maximum number of pending commands, i.e. commands which have been started by ````run```` but which have not yet returned a reply. If this number is exceeded, the next ````run```` returns an ERR_PENDING_OVERFLOW error.
+````maxPendingCommands```` designates the maximum number of pending commands, i.e. commands which have been started by ````run```` but which have not yet returned a reply. If this number is exceeded, the next ````run```` returns an ERR_PENDING_OVERFLOW error. This can be used to catch infinite recursion or synchronization errors.
 
-The function returns an object with the complete previous option values. Thus ````setOptions()```` can be used to obtain the current options without changing them.
+```setOptions``` returns an object with the complete previous option values. Thus ````setOptions()```` can be used to obtain the current options without changing them.
 
 ````setOptions```` can produce the following errors (error.code):
 * ERR_INVALID_OPTION
@@ -312,9 +320,9 @@ The function returns an object with the complete previous option values. Thus ``
 * ````workerName````: string
 * ````returns: ````: boolean
 
-This function removes the ```workerName : worker``` entry from the list of created workers. It is the user's responsibility to terminate the worker in the proper way. 
+This function removes ```workerName``` from the list of active workers. It is the user's responsibility to terminate the worker in the proper way. 
 
-It returns ```true``` if the entry was found, ```false``` otherwise.
+It returns ```true``` if the entry existed, ```false``` otherwise.
 
 
 ````removeWOrkerName```` doesn't produce errors.
@@ -324,7 +332,7 @@ It returns ```true``` if the entry was found, ```false``` otherwise.
 * ````workerName````: string
 * ````returns````: Cluster.worker object or ```undefined```
 
-This function returns the ```Cluster.worker``` object referenced by ````workerName```` or ```undefined``` when  no such object exists.
+This function returns the ```Cluster.worker``` object referenced by ````workerName````,  or ```undefined``` when  no such object exists.
 
 ````getWorkerByName```` doesn't produce errors.
 
@@ -358,22 +366,21 @@ npm test test/worker.js
 ```
 Please run the above texts separately - ```npm test``` won't work as Mocha has some subtle issues when running in multithreaded envornment (well, perhaps I could have figured it out but didn't have the time and motivation...)
 
-<h1 id="example">Full working example:</h1>
+<h1 id="example">Full working example</h1> (also available in the ./examples folder)
 
 
 
 ```javascript
-/* eslint-disable no-console */
-
-const clc = require('cluster-cmd');
+const {forkWait, on, run, ready, getWorkerByName, myName} = 
+    require('cluster-cmd');
 
 // Register a sync command handler for both master and worker
-clc.on.sync('add', ([a,b]) => {  
+on.sync('add', ([a,b]) => {  
     return a + b;
 });
 
 // Register an async command handler for both master and worker
-clc.on.async('async_add', ([a,b]) => {  
+on.async('async_add', ([a,b]) => {  
     return new Promise(resolve => {
         setTimeout(() => {
             resolve(a + b);
@@ -382,69 +389,69 @@ clc.on.async('async_add', ([a,b]) => {
 })
 
 
-if (clc.myName == 'master') { 
+if (myName == 'master') { 
     // code executed by master
 
     // fork (start) a new worker thread and name it 'worker'
     // with a timeout interval of 5 seconds ...
-    console.log(`${clc.myName}: starting worker`);
-    clc.forkWait('worker', 5000) 
+    console.log(`${myName}: starting worker`);
+    forkWait('worker', 5000) 
 
     // ... and wait until it has sent a 'ready' message   
     .then(async () => {  
-        console.log(`${clc.myName}: received 'ready' from worker`); 
+        console.log(`${myName}: received 'ready' from worker`); 
         
-        // Run worker's 'add' command:
-        let sum = await clc.run('worker','add',[3,4]); 
-        console.log(`${clc.myName}: 3 + 4 =  ${sum}`)  // master: sum is 7 
+        // run worker's 'add' command:
+        let sum = await run('worker','add',[3,4]); 
+        console.log(`${myName}: 3 + 4 =  ${sum}`)  // master: sum is 7 
 
-        // Run worker's 'async_add' command in the same way:
-        sum = await clc.run('worker','async_add',[3,4]); 
-        console.log(`${clc.myName}: 3 + 4 =  ${sum}`)  // master: sum is 7 
+        // run worker's 'async_add' command in the same way:
+        sum = await run('worker','async_add',[3,4]); 
+        console.log(`${myName}: 3 + 4 =  ${sum}`)  // master: sum is 7 
 
         // Alternatively, you can use promise syntax:
-        sum = await clc.run('worker','add',[3,4])
+        sum = await run('worker','add',[3,4])
         .then(sum => {
-            console.log(`${clc.myName}: 3 + 4 = ${sum}`)  // master: sum is 7
+            console.log(`${myName}: 3 + 4 = ${sum}`)  // master: sum is 7
         })
 
         // or good old callback syntax:
-        sum = await clc.run('worker','async_add',[3,4], (err, sum) => {
+        sum = await run('worker','async_add',[3,4], (err, sum) => {
              if (err) console.log(err);
-             else console.log(`${clc.myName}: 3 + 4 = ${sum}`)  // master: sum is 7
+             else console.log(`${myName}: 3 + 4 = ${sum}`)  // master: sum is 7
         })
 
-        // Execute worker's 'doSomethingUseful' command in the same way
-        console.log(`${clc.myName}: calling worker's 'calculate' command`)  
-        await clc.run('worker','calculate'); 
+        // execute worker's 'doSomethingUseful' command in the same way
+        console.log(`${myName}: calling worker's 'calculate' command`)  
+        await run('worker','calculate'); 
 
-        // Terminate worker
-        let worker = clc.getWorkerByName('worker');
+        // terminate worker
+        let worker = getWorkerByName('worker');
         worker.on('exit', () => {
-            console.log(`${clc.myName}: worker terminated`)
+            console.log(`${myName}: worker terminated`)
         })
         worker.process.kill();
     })
 
     // If the worker does not signal 'ready' within 5 seconds
-    // forkAndWait rejects with an 'ETIMEDOUT' error. 
+    // forkAndWait rejects with an 'ERR_WORKER_TIMED_OUT' error. 
     .catch(err => {
         console.log(`Worker timed out: ${err}`) // ETIMEDOUT error
     })
 }
-else if (clc.myName == 'worker') { 
+else if (myName == 'worker') { 
     // code executed by worker
 
-    // Register async command handler
-    clc.on.async('calculate', async () => {
+    // register async command handler
+    on.async('calculate', async () => {
         // Call master's 'add' command
-        console.log(`${clc.myName}: 5 + 7 = ${await clc.run('add',[5,7])}`); 
-        console.log(`${clc.myName}: 6 + 8 = ${await clc.run('async_add',[6,8])}`); 
+        console.log(`${myName}: 5 + 7 = ${await run('add',[5,7])}`); 
+        console.log(`${myName}: 6 + 8 = ${await run('async_add',[6,8])}`); 
     })
 
-    // Ready to receive commands
-    console.log(`${clc.myName} is ready`);
-    clc.ready(); 
+    // ready to receive commands
+    console.log(`${myName} is ready`);
+    ready(); 
 }
 ```
 
